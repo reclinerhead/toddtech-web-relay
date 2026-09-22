@@ -1,0 +1,67 @@
+name: Bug
+description: Report a bug or unexpected behavior.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One sentence describing what's broken.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal steps to reproduce.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-files
+    attributes:
+      label: Affected files
+      description: Files or directories you suspect are involved. Load-bearing — Claude Code uses this as the investigation surface.
+
+  - type: textarea
+    id: do-not-change
+    attributes:
+      label: Do-not-change list
+      description: Areas explicitly out of scope. Files, components, or behaviors Claude Code must not touch while fixing this bug.
+
+  - type: textarea
+    id: prior-art
+    attributes:
+      label: Prior art / related context
+      description: Related issues, prior fixes, or context that informs the diagnosis.
+
+  - type: dropdown
+    id: regression-test
+    attributes:
+      label: Regression test required?
+      description: Bug fixes for logic errors should include a test that fails on the old code and passes on the new. See "When to write unit tests" in CLAUDE.md.
+      options:
+        - "Yes — pure logic bug, regression test required"
+        - "No — I/O-side fix, manual verification only"
+    validations:
+      required: true

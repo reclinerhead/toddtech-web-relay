@@ -1,0 +1,62 @@
+name: Feature
+description: Propose a new feature, refactor, or enhancement.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why are we doing this? What problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, verifiable conditions that mean this is done. Use a checklist.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected-files
+    attributes:
+      label: Affected files
+      description: Files or directories you expect to touch. Load-bearing — Claude Code uses this as the implementation surface.
+    validations:
+      required: true
+
+  - type: textarea
+    id: do-not-change
+    attributes:
+      label: Do-not-change list
+      description: Areas explicitly out of scope. Files, components, or behaviors Claude Code must not touch.
+
+  - type: textarea
+    id: prior-art
+    attributes:
+      label: Prior art / related context
+      description: Existing patterns, similar features, related issues, or external references that inform the approach.
+
+  - type: dropdown
+    id: tests
+    attributes:
+      label: Test coverage required?
+      description: See "When to write unit tests" in CLAUDE.md. Pure logic → yes. I/O-heavy or trivial → no.
+      options:
+        - "Yes — pure logic, tests must accompany this PR"
+        - "No — I/O-heavy or trivial, manual verification only"
+    validations:
+      required: true
