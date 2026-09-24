@@ -1,0 +1,29 @@
+# Tenant configuration template for toddtech-web-relay.
+#
+# The real file lives on orchid at /srv/web-relay/tenants.yml (mode 600) and
+# is gitignored; this template is the only copy that exists in the repo.
+# The relay reads the file once at process start. After editing it:
+#   docker compose -f ~/toddtech-web-relay/compose.yaml restart web-relay
+#
+# One block per consuming project. Every field except `notes` is required.
+#
+#   key_sha256     SHA-256 hex of the tenant's plaintext key. Generate the key
+#                  on the desktop (`openssl rand -base64 32`), hand the
+#                  plaintext to the consuming app's environment, and store only
+#                  the hash here: `printf '%s' '<key>' | sha256sum`.
+#   allowed_hosts  Exact hostnames the tenant may fetch. Lowercase, no
+#                  wildcards, no ports, no schemes; a subdomain is its own
+#                  entry. An empty list is a config error.
+#   rate_limit     per_minute: token-bucket capacity and refill per minute for
+#                  this tenant. A global 3 s per-host gate applies on top.
+#   notes          Free text for the operator; never sent anywhere.
+
+tenants:
+  hearth:
+    key_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+    allowed_hosts:
+      - www.kalamazoocity.org
+      - kalamazoocity.org
+    rate_limit:
+      per_minute: 10
+    notes: "Water advisory watcher (hearth#331, hearth#341)"

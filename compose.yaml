@@ -1,0 +1,55 @@
+# toddtech-web-relay as it runs on orchid. Guide § 5 "The container" and § 7.
+#
+#   docker compose -f ~/toddtech-web-relay/compose.yaml up -d
+#   docker compose -f ~/toddtech-web-relay/compose.yaml restart web-relay   # after editing tenants.yml
+#
+# The port is published on loopback only; Tailscale Funnel is the public door.
+# The image tag is `latest` in Phase 1; Phase 3 pins by digest.
+
+name: web-relay
+
+services:
+  web-relay:
+    image: ghcr.io/reclinerhead/toddtech-web-relay:latest
+    container_name: web-relay
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    ports:
+      - "127.0.0.1:8787:8787"
+    networks:
+      - relay
+    # Explicit public resolvers (Quad9). The relay must never resolve `.lan`
+    # names, must not depend on the house resolver, and Docker's embedded DNS
+    # would drop orchid's loopback resolver anyway.
+    dns:
+      - 9.9.9.9
+      - 149.112.112.112
+    environment:
+      RELAY_TENANTS_FILE: /config/tenants.yml
+    env_file:
+      - path: /srv/web-relay/.env
+        required: false
+    volumes:
+      - /srv/web-relay/tenants.yml:/config/tenants.yml:ro
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8787/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  relay:
+    driver: bridge

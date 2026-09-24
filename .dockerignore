@@ -1,0 +1,12 @@
+.git
+.github
+.claude
+node_modules
+dist
+docs
+*.md
+tenants.yml
+tenants.example.yml
+.env
+.env.*
+compose.yaml
