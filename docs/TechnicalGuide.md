@@ -1,6 +1,6 @@
 # toddtech-web-relay — Technical Guide
 
-What the relay is built from, how a request moves through it, the security model, how it is deployed on orchid, and the decisions behind all of that. The README says *what and why*; this document says *how*. It describes the current state of the service; where something is not built yet, it says so. As of Phase 1 the service, its tests, and its packaging exist; the orchid deploy and Tailscale Funnel (Phase 2) have not happened.
+What the relay is built from, how a request moves through it, the security model, how it is deployed on orchid, and the decisions behind all of that. The README says *what and why*; this document says *how*. It describes the current state of the service; where something is not built yet, it says so. As of 2026-09-24 the relay runs on orchid behind Tailscale Funnel and serves Hearth's water-advisory watcher (Phase 2 of the epic); Phase 3 hardening has not started.
 
 This repository is public. Facts about orchid as a machine live in the private `toddtech-infrastructure` repo (`servers/Orchid.md`) and are never copied here; see `AGENTS.md` for the line between the two.
 
@@ -159,9 +159,9 @@ The relay exists to read public pages a little sooner than people otherwise woul
 
 ## 7. Deployment on orchid
 
-Not yet done: this section is the plan Phase 2 executes. Everything about orchid as a machine — addresses, hardware, OS, the other tenants and their ports, Tailscale, backups — is in the private `toddtech-infrastructure` repo, `servers/Orchid.md`. Read it before touching ports, networking, or Funnel. What this repo relies on from it: Docker is present, containers keep state under `/srv/<name>`, compose files are versioned and deployed by hand with `docker compose up -d`, the relay's port `8787` is free, and orchid's own resolver is a loopback Pi-hole (which is why the container sets its own DNS, § 5).
+Deployed 2026-09-24. Everything about orchid as a machine — addresses, hardware, OS, the other tenants and their ports, Tailscale, backups — is in the private `toddtech-infrastructure` repo, `servers/Orchid.md`, which carries the relay's row in its "what runs here" table and a short section of orchid-side facts. Read it before touching ports, networking, or Funnel. What this repo relies on from it: Docker is present, containers keep state under `/srv/<name>`, compose files are versioned and deployed by hand with `docker compose up -d`, the relay's port `8787` is orchid's only bridge-network tenant, and orchid's own resolver is a loopback Pi-hole (which is why the container sets its own DNS, § 5).
 
-The relay follows the same shape as orchid's other tenants — a versioned `compose.yaml`, state under `/srv/web-relay`, manual deploys — but as **its own checkout** (`~/toddtech-web-relay`), because it is not part of the house stack and its lifecycle is independent. Phase 2 also adds the relay's row to the runbook's "what runs here" table, in a second PR in that repo.
+The relay follows the same shape as orchid's other tenants — a versioned `compose.yaml`, state under `/srv/web-relay`, manual deploys — but as **its own checkout** (`~/toddtech-web-relay`), because it is not part of the house stack and its lifecycle is independent. The Funnel hostname is a fact about the house network and lives in the infrastructure repo's network docs, in Hearth's Vercel environment, and nowhere in this repo.
 
 ### Layout on orchid
 
@@ -189,32 +189,44 @@ An invalid value, or an invalid tenants file, makes the process exit with a mess
 
 ### Image
 
-Built by GitHub Actions (`.github/workflows/ci.yml`) on every push to `main`, after the test job passes, and pushed to **GHCR** (`ghcr.io/reclinerhead/toddtech-web-relay`), tagged by short SHA and `latest`. Pull requests run typecheck and tests only. Orchid pulls; it never needs Node or a build toolchain. The compose file names the tag being run (`latest` in Phase 1; Phase 3 pins by digest); a deploy is "pull, `up -d`". The package must stay private in the GHCR settings even though the repo is public.
+Built by GitHub Actions (`.github/workflows/ci.yml`) on every push to `main`, after the test job passes, and pushed to **GHCR** (`ghcr.io/reclinerhead/toddtech-web-relay`), tagged by short SHA and `latest`. Pull requests run typecheck and tests only. Orchid pulls; it never needs Node or a build toolchain. The compose file names the tag being run (`latest` in Phase 1; Phase 3 pins by digest); a deploy is "pull, `up -d`". The package is **public**, like the repo: the image holds nothing secret, and a public package means orchid pulls with no registry login and no token to rotate.
 
-### Bring-up (once)
+### Bring-up (done 2026-09-24; this is the procedure for a rebuild)
 
 ```bash
-# orchid
-git clone git@github.com:reclinerhead/toddtech-web-relay.git ~/toddtech-web-relay
-sudo mkdir -p /srv/web-relay && sudo chown todd:todd /srv/web-relay
+# orchid — the repo is public, so HTTPS needs no GitHub key on the box
+git clone https://github.com/reclinerhead/toddtech-web-relay.git ~/toddtech-web-relay
+sudo mkdir -p /srv/web-relay && sudo chown todd:todd /srv/web-relay      # interactive: sudo wants a password here
 cp ~/toddtech-web-relay/tenants.example.yml /srv/web-relay/tenants.yml && chmod 600 /srv/web-relay/tenants.yml
-# generate a tenant key on the desktop, put its sha256 in tenants.yml, hand the plaintext to the app
-cd ~/toddtech-web-relay && docker compose up -d
-curl -s http://127.0.0.1:8787/healthz
+# on the desktop: KEY=$(openssl rand -base64 32); echo "$KEY"; printf '%s' "$KEY" | sha256sum
+# put the hash in tenants.yml, hand the plaintext to the consuming app's environment
+docker compose -f ~/toddtech-web-relay/compose.yaml up -d
+curl -s http://127.0.0.1:8787/healthz          # {"ok":true,...,"tenants":1}
+docker exec web-relay nslookup orchid.lan      # must be NXDOMAIN: the container cannot see the house resolver
 
-# Funnel (once): enable the funnel node attribute in the tailnet policy, HTTPS certs + MagicDNS on in the admin console, then
+# Funnel (once): in the admin console, HTTPS certificates on, MagicDNS on, the `funnel` nodeAttr in the policy
+# (Access controls → Funnel → "Add Funnel to policy"), and orchid's key expiry disabled (house rule). Then:
 sudo tailscale funnel --bg 8787
 tailscale funnel status
 ```
 
-### Smoke test from anywhere
+The container runs as uid 1000 (`node`); `todd` is uid 1000 on orchid, which is why the mode-600 tenants file is readable through the bind mount. On a box where that differs, set `user:` in compose or chown the file.
+
+**Gotchas from the first bring-up.**
+
+- **The Funnel's public DNS record may not appear.** Tailscale documents up to ten minutes; on 2026-09-24 the name's public address was withdrawn and nothing replaced it for 25 minutes. `sudo systemctl restart tailscaled` published the Funnel relay addresses within a minute (a known backend quirk, tailscale/tailscale#7103). Check with `nslookup <funnel-name> ns1.dnsimple.com`, the authoritative server: an empty answer means not yet published.
+- **Test Funnel from a client that is not on the tailnet.** MagicDNS on a member resolves the name straight to orchid's tailnet address, so a curl from a tailnet machine succeeds without ever touching Funnel. Disconnect the Tailscale client on the desktop (or use a phone on cellular) for the real test.
+- **Caddy already owns port 443 on orchid**, so tailscaled logs `localListener failed to listen on <tailnet addr>:443 ... address already in use` every few seconds. Funnel and tailnet peers are served through tailscaled's own network stack and are unaffected; the noise is only in the journal. Recorded in the runbook.
+- **Windows PowerShell aliases `curl` to Invoke-WebRequest.** Use `curl.exe` for the smoke commands below.
+
+### Smoke test from outside the house
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer <key>" \
-  "https://orchid.<tailnet>.ts.net/fetch?url=https%3A%2F%2Fwww.kalamazoocity.org%2FResidents%2FWater-Sewer-Service%2FBoil-Water-Advisories"
+  "https://<funnel-name>/fetch?url=https%3A%2F%2Fwww.kalamazoocity.org%2FResidents%2FWater-Sewer-Service%2FBoil-Water-Advisories"
 ```
 
-Expect `200`. A `403` with `x-relay-blocked` is the relay refusing; a `403` with `x-relay-upstream-status: 403` is the origin refusing (which would mean the house address itself is now blocked — stop and think before retrying).
+Expect `200` with `x-relay-upstream-status: 200` and `x-relay-tenant: hearth`. A `403` with `x-relay-blocked` is the relay refusing; a `403` with `x-relay-upstream-status: 403` is the origin refusing (which would mean the house address itself is now blocked — stop and think before retrying). The other checks: no key → `401 auth-failed`; a POST → `405 method-not-allowed`; a host off the tenant's list → `403 host-not-allowed`. Note that a LAN or tailnet address is refused as `host-not-allowed` too, because the allowlist runs before DNS; the `private-address` path is what stops an allowlisted name that resolves inward, and the unit tests plus `docker exec web-relay nslookup orchid.lan` cover it.
 
 ### Day-to-day
 
@@ -233,7 +245,11 @@ docker compose -f ~/toddtech-web-relay/compose.yaml restart web-relay   # after 
 | house address blocked upstream | `403` with `x-relay-upstream-status: 403` | consumer alarm; relay log shows the run of 403s for that host |
 | tenant misconfigured | `403 x-relay-blocked: host-not-allowed` | consumer alarm; log names the tenant and host |
 
-Backups: `/srv/web-relay/` is one small file of hashed keys and allowlists — include it in orchid's `/srv` backup set; it is recreatable from this document in minutes either way.
+Backups: `/srv/web-relay/` is one small file of hashed keys and allowlists. It is in orchid's `/srv` backup list in the runbook; it is recreatable from this document in minutes either way, at the cost of issuing each consumer a new key.
+
+### Consumer-side pacing
+
+A consumer that fetches several pages per run must respect the relay's two limits (§ 5 rule 7): one fetch per upstream host per 3 s across all tenants, and its own `per_minute` bucket. Hearth's OpenCities adapter fetches a list page and then, for advisories it has not stored, their detail pages; through the relay it paces those at 3.2 s apart and caps them at 8 per run (hearth#353). A burst would be refused with `429 host-throttled`, and Hearth never re-fetches a stored URL, so the tenant's `per_minute` is set with the seed run in mind.
 
 ## 8. Extensibility
 
@@ -275,9 +291,10 @@ Non-goals, so they are not argued about later: POST/PUT passthrough, cookie jars
 | Buffer the body (up to the cap) before responding | Stream it through | The contract promises no partial body on a `413`, which needs the whole body first; 5 MiB is cheap |
 | `node:24-alpine` | distroless | The compose healthcheck needs `wget` in the image; the non-root, read-only, capability-dropped constraints are the same either way |
 | Resolve with `dns.resolve4/6`, not `dns.lookup` | `getaddrinfo` | The resolver path honors the container's explicit DNS and ignores `/etc/hosts`; the check and the pinned connect then agree on where the name points |
+| Public GHCR package | Private package plus a registry token on orchid | The source is public and the image holds nothing secret; a private package would add a PAT to store and rotate on the box for no gain |
 
 ## 11. Consumers
 
 | Project | Tenant | Hosts | Notes |
 |---|---|---|---|
-| Hearth — water advisory watcher | `hearth` | `www.kalamazoocity.org` | Hearth's `WATER_ADVISORY_FETCH_PROXY_URL` template + `use_fetch_proxy: true` on the Kalamazoo source; Kalamazoo currently watches WMUK's feed as an interim and moves back to the city page once the relay is live |
+| Hearth — water advisory watcher | `hearth` | `www.kalamazoocity.org`, `kalamazoocity.org` | Live since 2026-09-24 (hearth#353): `WATER_ADVISORY_FETCH_PROXY_URL` template in Vercel + `use_fetch_proxy: true` on the Kalamazoo source, which is back on the city's own page. `per_minute: 15`, sized for a seed run (one list fetch plus up to eight paced detail fetches). Cron every 30 minutes; one request per run in steady state |

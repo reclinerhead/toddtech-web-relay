@@ -2,7 +2,7 @@
 
 A small, self-hosted **fetch relay**: an HTTP service that retrieves a public web page on behalf of an application and hands the body back unchanged. It runs on a home connection, so the page sees a residential visitor rather than a cloud data center.
 
-Status: **design complete, implementation in progress** — see the [epic](https://github.com/reclinerhead/toddtech-web-relay/issues/1) and the [Technical Guide](docs/TechnicalGuide.md).
+Status: **deployed and in service** since 2026-09-24, relaying Hearth's water-advisory checks — see the [epic](https://github.com/reclinerhead/toddtech-web-relay/issues/1) for what comes next and the [Technical Guide](docs/TechnicalGuide.md) for how it works.
 
 ## Why this exists
 
@@ -39,7 +39,7 @@ Every app gets its **own tenant**: its own key, its own allowlist of upstream ho
 
 On **orchid**, the basement Ubuntu server, as a Docker container with a non-root user, a read-only filesystem, dropped capabilities, and a port bound to loopback only. The public entry point is **Tailscale Funnel**, which publishes exactly that one port under a `*.ts.net` hostname with TLS managed by Tailscale. The LAN is not exposed; the relay's own rules are what stand between the internet and the box. Details, threat model, and the runbook are in the [Technical Guide](docs/TechnicalGuide.md).
 
-## Repository layout (planned)
+## Repository layout
 
 ```
 src/                 the service — Node, no framework

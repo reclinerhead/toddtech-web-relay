@@ -16,6 +16,9 @@
 #                  entry. An empty list is a config error.
 #   rate_limit     per_minute: token-bucket capacity and refill per minute for
 #                  this tenant. A global 3 s per-host gate applies on top.
+#                  Size it for the consumer's busiest run: Hearth's first run
+#                  against a fresh source is one list fetch plus up to eight
+#                  detail fetches paced 3.2 s apart, hence 15.
 #   notes          Free text for the operator; never sent anywhere.
 
 tenants:
@@ -25,5 +28,5 @@ tenants:
       - www.kalamazoocity.org
       - kalamazoocity.org
     rate_limit:
-      per_minute: 10
+      per_minute: 15
     notes: "Water advisory watcher (hearth#331, hearth#341)"
